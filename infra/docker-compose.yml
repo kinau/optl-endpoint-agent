@@ -1,0 +1,104 @@
+name: endpoint-telemetry
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      # Published on all host interfaces so agents in VMs (e.g. VMware Fusion) can reach them.
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "13133:13133" # health check
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-otlp-receiver
+      - --web.enable-remote-write-receiver # Tempo metrics-generator (span metrics, service graph)
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.1.0
+    command: ["-target=all", "-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # HTTP API (OTLP ingest stays on the internal network)
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      # Local learning setup: anonymous admin, no login form.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    restart: unless-stopped
+
+  # Sends sample metrics, traces and logs to the Collector to verify the pipelines.
+  # Run with: docker compose --profile test run --rm telemetrygen-metrics (or -traces / -logs)
+  telemetrygen-metrics:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0
+    profiles: ["test"]
+    command: ["metrics", "--otlp-endpoint=otel-collector:4317", "--otlp-insecure", "--duration=30s", "--rate=1", "--service=telemetrygen"]
+    depends_on: [otel-collector]
+  telemetrygen-traces:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0
+    profiles: ["test"]
+    command: ["traces", "--otlp-endpoint=otel-collector:4317", "--otlp-insecure", "--traces=10", "--service=telemetrygen"]
+    depends_on: [otel-collector]
+  telemetrygen-logs:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0
+    profiles: ["test"]
+    command: ["logs", "--otlp-endpoint=otel-collector:4317", "--otlp-insecure", "--logs=10", "--service=telemetrygen", "--body=telemetrygen smoke test"]
+    depends_on: [otel-collector]
+
+volumes:
+  prometheus-data:
+  tempo-data:
+  loki-data:
+  grafana-data:

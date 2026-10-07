@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EndpointAgent.Collectors/EndpointAgent.Collectors.csproj" />
+    <Project Path="src/EndpointAgent.MacOS/EndpointAgent.MacOS.csproj" />
+    <Project Path="src/EndpointAgent.Windows/EndpointAgent.Windows.csproj" />
+    <Project Path="src/EndpointAgent/EndpointAgent.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EndpointAgent.Tests/EndpointAgent.Tests.csproj" />
+  </Folder>
+</Solution>

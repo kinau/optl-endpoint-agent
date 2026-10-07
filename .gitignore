@@ -1,0 +1,29 @@
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+TestResults/
+artifacts/
+
+# Visual Studio and IDE files
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+
+# .NET generated files
+*.cache
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+Generated\ Files/
